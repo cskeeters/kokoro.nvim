@@ -1,4 +1,5 @@
 -- local utils = require('outline.utils.init')
+local rex = require('rex_pcre')
 
 local FEMALE=0
 local MALE=1
@@ -434,41 +435,41 @@ end
 
 local function detect_gender(par)
   local female_patterns = {
-    [[%W*she%W*]],
-    [[%W*Mrs%W*]],
-    [[%W*Ms%W*]],
-    [[%W*woman%W*]],
+    [[\bshe\b]],
+    [[\bMrs\b]],
+    [[\bMs\b]],
+    [[\bwoman\b]],
   }
   local male_patterns = {
-    [[%W*he%W*]],
-    [[%W*Mr%W*]],
-    [[%W*man%W*]],
+    [[\bhe\b]],
+    [[\bMr\b]],
+    [[\bman\b]],
   }
 
   local pos = 999
   local gender = get_default_quote_gender()
 
   for post_quote in par:gmatch([[".-"%s+([^.?!]+)]]) do
-    print("post_quote: " ..post_quote)
 
-    local s, e
     for _, female_pattern in ipairs(female_patterns) do
-      s, e = post_quote:find(female_pattern)
+      local s, _ = rex.find(post_quote, female_pattern)
       if s ~= nil then
-        print("Detected FEMALE with: " ..female_pattern .. " " .. tostring(s))
+        if debug then
+          print("Detected FEMALE with: " ..female_pattern .. " in " .. post_quote)
+        end
         if s < pos then
-          print("...setting")
           pos = s
           gender = FEMALE
         end
       end
     end
     for _, male_pattern in ipairs(male_patterns) do
-      s, e = post_quote:find(male_pattern)
+      local s, _ = rex.find(post_quote, male_pattern)
       if s ~= nil then
-        print("Detected MALE with: " ..male_pattern .. " " .. tostring(s))
+        if debug then
+          print("Detected MALE with: " ..male_pattern .. " in " .. post_quote)
+        end
         if s < pos then
-          print("...setting")
           pos = s
           gender = MALE
         end
@@ -486,10 +487,8 @@ end
 local function is_only_quote(par)
   local s, e = string.find(par, [[^"[^"]+"$]])
   if s ~= nil then
-    print("is_only_quote")
     return true
   end
-  print("is_only_quote nope: "..par)
   return false
 end
 
