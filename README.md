@@ -1,6 +1,19 @@
+This plugin can can help people check text by listening to Kokoro read it.
+* Breaks paragraphs into sentances and renders *two* at a time asynchronously.  Audio typically has a 1-2 second start delay, but is smooth after that.
+
+While playing with it, I made it so that it can read books ok too.
+* Quoted text will be read in another voice.
+* Detects the gender of the speaker and use the appropriate gendered voice.
+* Tracks gender used in paragraphs so that paragraphs with quoted text only will use the gender from two paragraphs below to support common back and forth dialog.
+
+
+# Demonstration
+
+A demonstration can be found at <https://cskeeters.github.io/kokoro.nvim/>.
+
 # Installation
 
-This plugin requires the luarock *lrexlib-pcre*. Use `--lua-version=5.1` to install for neovim.
+This plugin requires the luarock `lrexlib-pcre`. Use `--lua-version=5.1` to install for neovim.
 
 ```sh
 luarocks install lrexlib-pcre --lua-version=5.1
@@ -42,8 +55,10 @@ To install with [lazy.nvim](https://github.com/folke/lazy.nvim), You need someth
         vim.keymap.set({'n'}, '<Leader><Leader>gks', ":KokoroChooseSpeed<Cr>", { noremap=true, silent=true, desc="Choose speed for Kokoro" })
     end
 }
+```
 
-# Setup Options
+## Setup Options
+
 ```lua
 {
   -- Kokoro Runtime
@@ -58,7 +73,7 @@ To install with [lazy.nvim](https://github.com/folke/lazy.nvim), You need someth
   word_threshold = 15,
 
   -- Kokoro options
-  voice = "af_nicole",
+  voice = "af_aoede",
   speed = 1.0,
   male_quote_voice="bm_lewis",
   female_quote_voice="bf_alice",
