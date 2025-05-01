@@ -13,6 +13,43 @@ A demonstration can be found at <https://cskeeters.github.io/kokoro.nvim/>.
 
 # Installation
 
+## Kokoro
+
+1. Clone the `kokoro-tts` repository (somewhere you choose):
+
+    ```sh
+    git clone https://github.com/nazdridoy/kokoro-tts.git
+    ```
+2. Download required model and voices:
+
+    ```sh
+    cd kokoro-tts
+    wget https://github.com/nazdridoy/kokoro-tts/releases/download/v1.0.0/kokoro-v1.0.onnx
+    wget https://github.com/nazdridoy/kokoro-tts/releases/download/v1.0.0/voices-v1.0.bin
+    ```
+
+3. Install the python packages using one of the following methods:
+
+    1. Use [uv](astral-sh/uv) to install into `.venv` (strongly recommended  [^1] [^2]):
+
+        ```sh
+        uv venv --python 3.10
+        uv sync
+        ```
+
+    2. Install using pip:
+
+        ```sh
+        pip install -r requirements.txt
+        ```
+
+    3. Figure out how to use conda
+
+[^1]: Kokoro may not work without exactly version 3.10 of python.
+[^2]: Kokoro has a *lot* of dependencies.  If you want to remove it later, it will hard (impossible) to remove the packages only required by kokoro.
+
+## Neovim
+
 This plugin requires the luarock `lrexlib-pcre`. Use `--lua-version=5.1` to install for neovim.
 
 ```sh
@@ -38,9 +75,9 @@ To install with [lazy.nvim](https://github.com/folke/lazy.nvim), You need someth
             -- Setting debug to true will route tinymist's stderr to :messages
             debug = false,
             path = os.getenv("HOME")..'/working/kokoro-tts',
-            player = "afplay",
+            uv = true,
 
-            conda_env = "kokoro",
+            player = "afplay",
 
             load_voices = true,
 
@@ -63,7 +100,8 @@ To install with [lazy.nvim](https://github.com/folke/lazy.nvim), You need someth
 {
   -- Kokoro Runtime
   path = nil,
-  conda_env = nil,
+  uv = false,
+
   player = "afplay",
 
   -- Plugin Options
