@@ -1,7 +1,7 @@
 This plugin can can help people check text by listening to [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M) read it.
-* Breaks paragraphs into sentances and renders *two* at a time asynchronously.  Audio typically has a 1-2 second start delay, but is smooth after that.
+* Breaks paragraphs into sentences and renders *two* at a time asynchronously.  Audio typically has a 1-2 second start delay, but is smooth after that.
 
-While playing with it, I made it so that it can read books ok too.
+While playing with it, I made it so that it can read books OK too.
 * Quoted text will be read in another voice.
 * Detects the gender of the speaker and use the appropriate gendered voice.
 * Tracks gender used in paragraphs so that paragraphs with quoted text only will use the gender from two paragraphs below to support common back and forth dialog.
