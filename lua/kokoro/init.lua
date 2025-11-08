@@ -1,4 +1,4 @@
-local rex = require('rex_pcre')
+local rex = require('rex_pcre2')
 
 local FEMALE=0
 local MALE=1
