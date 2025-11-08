@@ -1,42 +1,7 @@
-local libnotify = require 'libnotify'
-
-local NOTIFICATION_TITLE = "kokoro.nvim"
-local notifier = nil
-
 local rex = require('rex_pcre')
 
 local FEMALE=0
 local MALE=1
-
-local function write_to_file(filename, text)
-    -- Open file in write mode ("w" overwrites, "a" appends)
-    local file, err = io.open(filename, "w")
-    if not file then
-        notifier.error("Error opening file: " .. (err or "unknown error"))
-        return false
-    end
-
-    -- Write text to the file
-    file:write(text)
-
-    -- Close the file
-    file:close()
-    return true
-end
-
-local function truncate_string(str, max_len)
-    max_len = max_len or 20  -- Default to 20 if not specified
-
-    if type(str) ~= "string" then
-        return ""  -- Return empty string for non-string input
-    end
-
-    if #str <= max_len then
-        return str  -- Return original string if it's short enough
-    else
-        return str:sub(1, max_len) .. "..."  -- Truncate and append "..."
-    end
-end
 
 local M = {
     clip_id = 0,
@@ -68,6 +33,74 @@ local M = {
     },
 
 }
+
+local NOTIFICATION_NAME = "kokoro.nvim"
+
+local function log(msg, level)
+    -- Filtering for this plugin only
+    if level >= M.opts.notify_min_level then
+        vim.notify(NOTIFICATION_NAME.. ": " .. msg, level);
+    end
+end
+
+local function log_trace(msg)
+    log(msg, vim.log.levels.TRACE)
+end
+
+local function log_debug(msg)
+    log(msg, vim.log.levels.DEBUG)
+end
+
+local function log_info(msg)
+    log(msg, vim.log.levels.INFO)
+end
+
+local function log_warn(msg)
+    log(msg, vim.log.levels.WARN)
+end
+
+local function log_error(msg)
+    log(msg, vim.log.levels.ERROR)
+end
+
+
+function path_exists(rpath)
+    local paths = vim.api.nvim_get_runtime_file(rpath, false)
+    return #paths > 0
+end
+
+
+
+local function write_to_file(filename, text)
+    -- Open file in write mode ("w" overwrites, "a" appends)
+    local file, err = io.open(filename, "w")
+    if not file then
+        log_error("Error opening file: " .. (err or "unknown error"))
+        return false
+    end
+
+    -- Write text to the file
+    file:write(text)
+
+    -- Close the file
+    file:close()
+    return true
+end
+
+local function truncate_string(str, max_len)
+    max_len = max_len or 20  -- Default to 20 if not specified
+
+    if type(str) ~= "string" then
+        return ""  -- Return empty string for non-string input
+    end
+
+    if #str <= max_len then
+        return str  -- Return original string if it's short enough
+    else
+        return str:sub(1, max_len) .. "..."  -- Truncate and append "..."
+    end
+end
+
 
 -- Create a Clip object
 function M.create_clip(text, voice, speed)
@@ -122,17 +155,17 @@ function M.play()
     local cmd
 
     if #M.clips == 0 then
-        notifier.info("Finished playing clips")
+        log_info("Finished playing clips")
         return
     end
 
     -- Skip if a clip is already playing
     if M.clips[1]:is_playing() then
-        notifier.trace("Already Playing")
+        log_trace("Already Playing")
         return
     end
     if not M.clips[1]:is_rendered() then
-        notifier.trace("Not ready to play")
+        log_trace("Not ready to play")
         return
     end
 
@@ -160,13 +193,13 @@ function M.play()
             vim.schedule(function()
 
                 if code ~= 0 then
-                    notifier.error("Process exited with "..code..".  CMD: "..cmd)
+                    log_error("Process exited with "..code..".  CMD: "..cmd)
                     if M.opts.debug then
-                        notifier.debug("stdout: " .. table.concat(M.clips[1].tts_stdout, "\n"))
-                        notifier.debug("stderr: " .. table.concat(M.clips[1].tts_stderr, "\n"))
+                        log_debug("stdout: " .. table.concat(M.clips[1].tts_stdout, "\n"))
+                        log_debug("stderr: " .. table.concat(M.clips[1].tts_stderr, "\n"))
                     end
                 else
-                    notifier.info("Finished Playing: "..M.clips[1].text_trunc)
+                    log_info("Finished Playing: "..M.clips[1].text_trunc)
                 end
 
                 -- Remove the completed clip.  Assume first is always the one that just finished playing
@@ -178,11 +211,11 @@ function M.play()
         end,
     }
 
-    notifier.info("Playing: "..M.clips[1].text_trunc.." File: "..M.clips[1].wav_path)
+    log_info("Playing: "..M.clips[1].text_trunc.." File: "..M.clips[1].wav_path)
     cmd = string.format([[%s "%s"]], M.opts.player, M.clips[1].wav_path)
     M.clips[1].play_job_id = vim.fn.jobstart(cmd, job_opts)
     if M.clips[1].play_job_id <= 0 then
-        notifier.error("Error: Failed to start command '" .. cmd .. "'")
+        log_error("Error: Failed to start command '" .. cmd .. "'")
         return
     end
 end
@@ -221,13 +254,13 @@ end
 function M.tts()
     -- Limit to two workers
     if M.running_tts_count() >= M.opts.workers then
-        notifier.debug("tts worker limit")
+        log_debug("tts worker limit")
         return
     end
 
     local clip_index, clip_id = M.clip_to_render()
     if clip_index == -1 then
-        notifier.debug("no more clips to render")
+        log_debug("no more clips to render")
         return
     end
     local clip = M.clips[clip_index] -- this is NOT a reference!!!
@@ -241,7 +274,7 @@ function M.tts()
                     -- This clip may have a different index when this is called
                     local clip_index, clip = M.clip_by_id(clip_id)
                     if clip == nil then
-                        notifier.error("tts.on_stdout: Clip is nil")
+                        log_error("tts.on_stdout: Clip is nil")
                     else
                         for _, line in ipairs(data) do
                             table.insert(clip.tts_stdout, line)
@@ -257,7 +290,7 @@ function M.tts()
                     -- This clip may have a different index when this is called
                     local clip_index, clip = M.clip_by_id(clip_id)
                     if clip == nil then
-                        notifier.error("tts.on_stderr: Clip is nil")
+                        log_error("tts.on_stderr: Clip is nil")
                     else
                         for _, line in ipairs(data) do
                             table.insert(clip.tts_stderr, line)
@@ -272,20 +305,20 @@ function M.tts()
                 -- This clip may have a different index when this is called
                 local clip_index, clip = M.clip_by_id(clip_id)
                 if clip == nil then
-                    notifier.info(string.format("Finished Translating: nil Clip"))
+                    log_info(string.format("Finished Translating: nil Clip"))
                 else
                     M.clips[clip_index].tts_code = code
-                    notifier.info(string.format("Finished Translating: %s", clip.text_trunc))
+                    log_info(string.format("Finished Translating: %s", clip.text_trunc))
                 end
 
                 if code == 0 then
 
                     M.play()
                 else
-                    notifier.error("Process exited with "..code..".  CMD: "..cmd)
+                    log_error("Process exited with "..code..".  CMD: "..cmd)
                     if M.opts.debug then
-                        notifier.debug("stdout: " .. table.concat(M.trans_stdout, "\n"))
-                        notifier.debug("stderr: " .. table.concat(M.trans_stderr, "\n"))
+                        log_debug("stdout: " .. table.concat(M.trans_stdout, "\n"))
+                        log_debug("stderr: " .. table.concat(M.trans_stderr, "\n"))
                     end
                 end
 
@@ -297,7 +330,7 @@ function M.tts()
     local tts_txt_temp = vim.fn.tempname()
 
     if not write_to_file(tts_txt_temp, clip.text) then
-        notifier.error("Error writing to text tmp file for kokoro")
+        log_error("Error writing to text tmp file for kokoro")
         return
     end
 
@@ -309,11 +342,11 @@ function M.tts()
     clip.wav_path = vim.fn.tempname()..".wav"
 
     cmd = string.format("%s %s %s --speed %f --voice %s", kokoro, tts_txt_temp, clip.wav_path, clip.speed, clip.voice)
-    notifier.info(string.format("Translating text: %s", clip.text_trunc))
+    log_info(string.format("Translating text: %s", clip.text_trunc))
     clip.tts_job_id = vim.fn.jobstart(cmd, job_opts)
     M.clips[clip_index] = clip -- Update clip with changed values
     if clip.tts_job_id <= 0 then
-        notifier.error("Error: Failed to start command '" .. cmd .. "'")
+        log_error("Error: Failed to start command '" .. cmd .. "'")
         return
     end
 end
@@ -330,8 +363,8 @@ local function get_selected_text()
     local start_pos = vim.fn.getpos("'<")
     local end_pos = vim.fn.getpos("'>")
 
-    notifier.trace("start_pos: "..vim.inspect(start_pos))
-    notifier.trace("end_pos: "..vim.inspect(end_pos))
+    log_trace("start_pos: "..vim.inspect(start_pos))
+    log_trace("end_pos: "..vim.inspect(end_pos))
 
     local start_line = start_pos[2]
     local start_col = start_pos[3]
@@ -340,21 +373,21 @@ local function get_selected_text()
     local end_col = end_pos[3]
 
 
-    notifier.trace("start_line: "..start_line)
-    notifier.trace("end_line: "..end_line)
+    log_trace("start_line: "..start_line)
+    log_trace("end_line: "..end_line)
 
     local selected_text = {}
     -- nvim_buf_get_lines start and end lines are 0 based
     local lines = vim.api.nvim_buf_get_lines(0, start_line-1, end_line, false)
     for no = start_line,end_line do
         local line = lines[no - start_line + 1]
-        notifier.trace("Line: "..line)
+        log_trace("Line: "..line)
         if no == start_line then
             if no == end_line then
-                notifier.trace("no: "..no)
-                notifier.trace("start_line: "..start_line)
-                notifier.trace("start_col: "..start_col)
-                notifier.trace("end_col: "..end_col)
+                log_trace("no: "..no)
+                log_trace("start_line: "..start_line)
+                log_trace("start_col: "..start_col)
+                log_trace("end_col: "..end_col)
                 table.insert(selected_text, line:sub(start_col, end_col))
             else
                 table.insert(selected_text, line:sub(start_col))
@@ -462,16 +495,16 @@ local function group_sentences(sentences)
         local words = count_words(sentence)
 
         if M.opts.debug then
-            notifier.debug("words: "..words .. " prev_words: "..prev_words)
+            log_debug("words: "..words .. " prev_words: "..prev_words)
         end
 
         if prev_words < M.opts.word_threshold then
             if words < M.opts.word_threshold then
 
                 if M.opts.debug then
-                    notifier.debug("Joining:")
-                    notifier.debug("  1: "..sentences[n-1])
-                    notifier.debug("  2: "..sentences[n])
+                    log_debug("Joining:")
+                    log_debug("  1: "..sentences[n-1])
+                    log_debug("  2: "..sentences[n])
                 end
 
                 -- Join these short sentences
@@ -541,7 +574,7 @@ local function detect_gender(par)
             local s, _ = rex.find(post_quote, female_pattern)
             if s ~= nil then
                 if debug then
-                    notifier.debug("Detected FEMALE with: " ..female_pattern .. " in " .. post_quote)
+                    log_debug("Detected FEMALE with: " ..female_pattern .. " in " .. post_quote)
                 end
                 if s < pos then
                     pos = s
@@ -553,7 +586,7 @@ local function detect_gender(par)
             local s, _ = rex.find(post_quote, male_pattern)
             if s ~= nil then
                 if debug then
-                    notifier.debug("Detected MALE with: " ..male_pattern .. " in " .. post_quote)
+                    log_debug("Detected MALE with: " ..male_pattern .. " in " .. post_quote)
                 end
                 if s < pos then
                     pos = s
@@ -580,7 +613,7 @@ local function split_quotes(par)
     if is_only_quote(par) then
 
         if debug then
-            notifier.debug("Assume alternating gender")
+            log_debug("Assume alternating gender")
         end
 
         -- Assume alternating gender
@@ -632,10 +665,10 @@ end
 
 function M.Kokoro(opts)
     local mode = vim.api.nvim_get_mode().mode
-    notifier.trace("Mode: "..mode)
-    notifier.trace("range: "..opts.range)
-    notifier.trace("line1: "..opts.line1)
-    notifier.trace("line2: "..opts.line2)
+    log_trace("Mode: "..mode)
+    log_trace("range: "..opts.range)
+    log_trace("line1: "..opts.line1)
+    log_trace("line2: "..opts.line2)
 
     local text = ""
 
@@ -655,13 +688,13 @@ function M.Kokoro(opts)
         paragraphs = split_paragraphs(get_selected_text())
     end
 
-    notifier.debug("Paragraphs: ".. tostring(#paragraphs))
+    log_debug("Paragraphs: ".. tostring(#paragraphs))
 
     local sections = {}
     for _, par in ipairs(paragraphs) do
         sections = split_quotes(par)
         for _, section in ipairs(sections) do
-            notifier.trace("section_text: ".. section.text)
+            log_trace("section_text: ".. section.text)
             local sentences = split_sentences(section.text)
             local sentance_groups = group_sentences(sentences)
 
@@ -675,7 +708,7 @@ end
 function M.KokoroStop(opts)
     for i, clip in ipairs(M.clips) do
         if clip:is_rendering() then
-            notifier.info("Stopping TTS for clip_id: "..clip.clip_id)
+            log_info("Stopping TTS for clip_id: "..clip.clip_id)
             vim.fn.jobstop(clip.tts_job_id)
         end
         M.clips[i].tts_code = 1
@@ -684,7 +717,7 @@ function M.KokoroStop(opts)
 
     -- Will only need to stop the fist clip
     if M.clips[1]:is_playing() then
-        notifier.info("Stopping play for clip_id: "..M.clips[1].clip_id)
+        log_info("Stopping play for clip_id: "..M.clips[1].clip_id)
         vim.fn.jobstop(M.clips[1].play_job_id)
         M.clips = {M.clips[1]} -- remove other items in the queue
     else
@@ -706,7 +739,7 @@ function M.LoadVoices()
                     for _, line in ipairs(data) do
                         local index_start, index_end, voice = string.find(line, "%s*%d*%.%s(.*)")
                         if index_start ~= nil then
-                            notifier.debug("Found voice: "..voice)
+                            log_debug("Found voice: "..voice)
                             table.insert(voices, voice)
                         end
                     end
@@ -718,13 +751,13 @@ function M.LoadVoices()
         on_exit = function(_, code)
             vim.schedule(function()
                 if code == 0 then
-                    notifier.info("Voices Loaded")
+                    log_info("Voices Loaded")
                     M.voices = voices
                 else
-                    notifier.error("Process exited with "..code..".  CMD: "..cmd)
+                    log_error("Process exited with "..code..".  CMD: "..cmd)
                     if M.opts.debug then
-                        notifier.debug("stdout: " .. table.concat(M.trans_stdout, "\n"))
-                        notifier.debug("stderr: " .. table.concat(M.trans_stderr, "\n"))
+                        log_debug("stdout: " .. table.concat(M.trans_stdout, "\n"))
+                        log_debug("stderr: " .. table.concat(M.trans_stderr, "\n"))
                     end
                 end
 
@@ -742,7 +775,7 @@ function M.LoadVoices()
 
     local job_id = vim.fn.jobstart(cmd, job_opts)
     if job_id <= 0 then
-        notifier.error("Error: Failed to start command '" .. cmd .. "'")
+        log_error("Error: Failed to start command '" .. cmd .. "'")
         return
     end
 end
@@ -803,13 +836,11 @@ function M.setup(opts)
     -- local minor = vim.version().minor
 
     -- if minor < 7 then
-    --   notifier.error('kokoro.nvim requires nvim-0.7 or higher!')
+    --   log_error('kokoro.nvim requires nvim-0.7 or higher!')
     -- return
     -- end
 
     M.opts = vim.tbl_deep_extend('force', M.opts, opts or {})
-
-    notifier = libnotify.get_notifier(NOTIFICATION_TITLE, M.opts.notify_min_level)
 
     vim.fn.assert_notequal(nil, M.opts.path, "You must specify path to kokoro installation")
 
